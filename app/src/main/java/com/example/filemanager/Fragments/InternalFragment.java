@@ -12,8 +12,12 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.example.filemanager.FileAdapter;
+import com.example.filemanager.FileOpener;
+import com.example.filemanager.OnFileSelectedListener;
 import com.example.filemanager.R;
 import com.karumi.dexter.Dexter;
 import com.karumi.dexter.MultiplePermissionsReport;
@@ -22,15 +26,18 @@ import com.karumi.dexter.listener.PermissionRequest;
 import com.karumi.dexter.listener.multi.MultiplePermissionsListener;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-public class InternalFragment extends Fragment {
+public class InternalFragment extends Fragment implements OnFileSelectedListener {
+    private FileAdapter fileAdapter;
     private RecyclerView recyclerView;
     private List<File> fileList;
     private ImageView img_back;
     private TextView tv_pathHolder;
     File storage;
+    String data;
     
     View view;
 
@@ -42,14 +49,22 @@ public class InternalFragment extends Fragment {
         tv_pathHolder = view.findViewById(R.id.tv_pathHolder);
         img_back = view.findViewById(R.id.img_back);
         
-        runtimePermission();
+
         
         String internalStorage = System.getenv("EXTERNAL_STORAGE");
         Log.d("MyLog", internalStorage);
         storage = new File(internalStorage);
+
+        try {
+            data = getArguments().getString("path");
+            File file = new File(data);
+            storage = file;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         
         tv_pathHolder.setText(storage.getAbsolutePath());
-        
+        runtimePermission();
         return view;
     }
 
@@ -75,21 +90,55 @@ public class InternalFragment extends Fragment {
         ArrayList<File> arrayList = new ArrayList<>();
         File[] files = file.listFiles();
 
-        for(File singleFile: files) {
-            if(singleFile.isDirectory() && !singleFile.isHidden()) {
-                arrayList.addAll(findFiles(singleFile));
+        if(files != null) {
+            for(File singleFile: files) {
+                if(singleFile.isDirectory() && !singleFile.isHidden()) {
+                    arrayList.add(singleFile);
+                }
+            }
+            for(File singleFile: files) {
+                String lowerFileName = singleFile.getName().toLowerCase();
+                if(lowerFileName.endsWith(".jpeg") || lowerFileName.endsWith(".jpg") || lowerFileName.endsWith(".png") || lowerFileName.endsWith(".mp3")
+                        || lowerFileName.endsWith(".wav") || lowerFileName.endsWith(".mp4") || lowerFileName.endsWith(".pdf") || lowerFileName.endsWith(".doc")
+                        || lowerFileName.endsWith(".apk")) {
+                    arrayList.add(singleFile);
+                }
             }
         }
-        for(File singleFile: files) {
-            String lowerFileName = singleFile.getName().toLowerCase();
-            if(lowerFileName.endsWith(".jpeg") || lowerFileName.endsWith(".jpg") || lowerFileName.endsWith(".png") || lowerFileName.endsWith(".mp3")
-            || lowerFileName.endsWith(".wav") || lowerFileName.endsWith(".mp4") || lowerFileName.endsWith(".pdf") || lowerFileName.endsWith(".doc")
-            || lowerFileName.endsWith(".apk")) {
 
+        return arrayList;
+    }
+
+    private void displayFiles() {
+        recyclerView = view.findViewById(R.id.recycler_internal);
+        recyclerView.setHasFixedSize(true);
+        recyclerView.setLayoutManager(new GridLayoutManager(getContext(), 2));
+        fileList = new ArrayList<>();
+        fileList.addAll(findFiles(storage));
+        fileAdapter = new FileAdapter(getContext(), fileList, this);
+        recyclerView.setAdapter(fileAdapter);
+    }
+
+    @Override
+    public void onFileClicked(File file) {
+        if(file.isDirectory()) {
+            Bundle bundle = new Bundle();
+            bundle.putString("path", file.getAbsolutePath());
+            InternalFragment internalFragment = new InternalFragment();
+            internalFragment.setArguments(bundle);
+            getChildFragmentManager().beginTransaction().replace(R.id.fragment_container, internalFragment).addToBackStack(null).commit();
+        } else {
+            Log.d("MyLog", "File Opening");
+            try {
+                FileOpener.openFile(getContext(), file);
+            } catch (IOException e) {
+                e.printStackTrace();
             }
         }
     }
 
-    private void displayFiles() {
+    @Override
+    public void onFileLongClicked(File file) {
+
     }
 }
